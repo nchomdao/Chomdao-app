@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chomdao — ย้ายข้อมูลไป Firebase</title>
+<style>
+body{font-family:sans-serif;background:#0f1117;color:#f1f5f9;padding:40px;max-width:600px;margin:0 auto}
+h1{font-size:22px;margin-bottom:20px}
+.btn{padding:14px 24px;border-radius:8px;font-size:16px;cursor:pointer;border:none;color:#fff;width:100%;margin-bottom:12px;font-weight:600}
+.btn-blue{background:#3b82f6}.btn-green{background:#10b981}
+#log{background:#1e2535;border-radius:8px;padding:16px;font-family:monospace;font-size:13px;white-space:pre-wrap;min-height:200px;max-height:60vh;overflow-y:auto}
+</style>
+</head>
+<body>
+<h1>🔥 ย้ายข้อมูลจาก Google Sheets → Firebase</h1>
+<button class="btn btn-blue" onclick="migrate()">🚀 เริ่มย้ายข้อมูล</button>
+<div id="log">พร้อมย้ายข้อมูล กดปุ่มด้านบนเลย...</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
+import { getFirestore, doc, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB5NgNaHzJlPQeIHxZJY9mXIzLTfRQOOdc",
+  authDomain: "chomdao-d8374.firebaseapp.com",
+  projectId: "chomdao-d8374",
+  storageBucket: "chomdao-d8374.firebasestorage.app",
+  messagingSenderId: "78710808454",
+  appId: "1:78710808454:web:6546e7cbaacc71c9a99607"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+
+const API_URL='https://script.google.com/macros/s/AKfycbw8sCjx2yW_rkcMC8xDl_U5tgkEZOur9EyAzOrFzzhlKgBpi_MVKBmMRcZymxqOr9-I2A/exec';
+
+function log(msg){
+  const el=document.getElementById('log');
+  el.textContent+='\n'+msg;
+  el.scrollTop=el.scrollHeight;
+}
+
+async function migrate(){
+  const el=document.getElementById('log');
+  el.textContent='เริ่มย้ายข้อมูล...\n';
+
+  // 1. ดึงจาก Google Sheets
+  log('📥 กำลังดึงข้อมูลจาก Google Sheets...');
+  let data;
+  try{
+    const res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'getAll'})});
+    data=await res.json();
+    if(data.error) throw new Error(data.error);
+  }catch(e){
+    log('❌ ดึงข้อมูลจาก Sheet ไม่ได้: '+e.message);
+    return;
+  }
+
+  const rooms=data.rooms||[];
+  const bills=data.bills||[];
+  const meters=data.meters||{};
+  const buildings=data.buildings||[];
+
+  log('✅ ได้ข้อมูลจาก Sheet:');
+  log('   Rooms: '+rooms.length);
+  log('   Bills: '+bills.length);
+  log('   Meters: '+Object.keys(meters).length);
+  log('   Buildings: '+buildings.length);
+
+  // 2. เขียนลง Firebase
+  log('\n🔥 กำลังเขียนลง Firebase...');
+
+  // Buildings
+  log('   → หอพัก...');
+  for(const b of buildings){
+    await setDoc(doc(db,'buildings',b.key),b);
+  }
+  log('   ✅ หอพัก '+buildings.length+' รายการ');
+
+  // Rooms (batch max 500)
+  log('   → ห้องพัก...');
+  let batch=writeBatch(db);
+  let count=0;
+  for(const r of rooms){
+    if(!r.id) continue;
+    r.price=Number(r.price)||0;
+    batch.set(doc(db,'rooms',r.id),r);
+    count++;
+    if(count%400===0){await batch.commit();batch=writeBatch(db)}
+  }
+  if(count%400!==0) await batch.commit();
+  log('   ✅ ห้องพัก '+count+' ห้อง');
+
+  // Bills (deduplicate + fix month format)
+  log('   → ค่าใช้จ่าย (deduplicate)...');
+  const billMap={};
+  bills.forEach(b=>{
+    if(!b.room||!b.month) return;
+    // fix month format
+    let mo=String(b.month);
+    if(mo.includes('T')) mo=mo.substring(0,7);
+    if(mo.length>7 && mo.match(/^\d{4}-\d{2}/)) mo=mo.substring(0,7);
+    b.month=mo;
+    const key=b.room+'_'+mo;
+    // keep the one with more data
+    if(billMap[key]){
+      const old=billMap[key];
+      if((b.water||b.elec)&&(!old.water&&!old.elec)) billMap[key]=b;
+      else if(b.status!=='รอชำระ'&&old.status==='รอชำระ') billMap[key]=b;
+    } else {
+      billMap[key]=b;
+    }
+  });
+  const cleanBills=Object.values(billMap);
+  batch=writeBatch(db);
+  count=0;
+  for(const b of cleanBills){
+    const key=b.room+'_'+b.month;
+    const extras=typeof b.extras==='string'?b.extras:JSON.stringify(b.extras||[]);
+    batch.set(doc(db,'bills',key),{
+      room:b.room,month:b.month,tenant:b.tenant||'',
+      rent:Number(b.rent)||0,water:Number(b.water)||0,elec:Number(b.elec)||0,
+      extras:extras,status:b.status||'รอชำระ'
+    });
+    count++;
+    if(count%400===0){await batch.commit();batch=writeBatch(db)}
+  }
+  if(count%400!==0) await batch.commit();
+  log('   ✅ ค่าใช้จ่าย '+count+' รายการ (จาก '+bills.length+' ลบซ้ำเหลือ '+count+')');
+
+  // Meters
+  log('   → มิเตอร์...');
+  batch=writeBatch(db);
+  count=0;
+  for(const k of Object.keys(meters)){
+    batch.set(doc(db,'meters',k),{key:k,prev:Number(meters[k].prev)||0,curr:Number(meters[k].curr)||0});
+    count++;
+    if(count%400===0){await batch.commit();batch=writeBatch(db)}
+  }
+  if(count%400!==0) await batch.commit();
+  log('   ✅ มิเตอร์ '+count+' รายการ');
+
+  log('\n🎉 ย้ายข้อมูลสำเร็จ!');
+  log('ปิดหน้านี้แล้วเปิดแอปหลักได้เลย');
+}
+
+window.migrate=migrate;
+</script>
+</body>
+</html>
