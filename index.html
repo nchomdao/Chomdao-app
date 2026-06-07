@@ -2,8 +2,29 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Chomdao — ระบบจัดการหอพัก</title>
+
+<!-- ===== PWA ===== -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f1117">
+<!-- Android / Chrome -->
+<meta name="mobile-web-app-capable" content="yes">
+<!-- iOS / Safari: เปิดเต็มจอเหมือนแอป -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Chomdao">
+<link rel="apple-touch-icon" href="dormitory-logo-square.png">
+<link rel="icon" type="image/svg+xml" href="dormitory-logo.svg">
+<link rel="icon" type="image/png" href="dormitory-logo-hq.png">
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW register failed', e));
+  });
+}
+</script>
+
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600&family=Kanit:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0f1117;--bg2:#161b27;--bg3:#1e2535;--bg4:#252d3d;--accent:#3b82f6;--accent2:#60a5fa;--green:#10b981;--green2:#34d399;--red:#ef4444;--red2:#f87171;--amber:#f59e0b;--amber2:#fbbf24;--purple:#8b5cf6;--purple2:#a78bfa;--text:#f1f5f9;--text2:#94a3b8;--text3:#64748b;--border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.14);--radius:12px;--rds:8px;--shadow:0 4px 24px rgba(0,0,0,.4)}
@@ -632,7 +653,7 @@ function checkOverdueBills(){
 }
 
 // ===== รหัสผ่านเข้าแอป (เปลี่ยนได้) =====
-const APP_PASSWORD = 'chomdao1234';
+const APP_PASSWORD = 'chomdao2569';
 
 function checkPassword(){
   // ถ้าเคยใส่รหัสถูกแล้ว จำตลอด (ใช้ localStorage)
