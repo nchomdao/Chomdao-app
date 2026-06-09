@@ -205,6 +205,26 @@ tbody tr:hover td{background:var(--bg3)}
   .bill-desktop{display:none}
   .bill-mobile{display:block}
 }
+/* ===== PDF overlay (แสดงในแอป รองรับ iOS) ===== */
+.pdf-ov{display:none;position:fixed;inset:0;z-index:1000;background:#e5e7eb;overflow:auto;-webkit-overflow-scrolling:touch}
+.pdf-ov.show{display:block}
+.pdf-bar{position:sticky;top:0;z-index:10;background:#1a365d;color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap}
+.pdf-bar button{padding:10px 20px;border:0;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;font-family:'Sarabun',sans-serif}
+.pdf-bar .save{background:#FF6B2B;color:#fff}
+.pdf-bar .close{background:rgba(255,255,255,.16);color:#fff}
+.pdf-bar .hint{font-size:12px;opacity:.85;flex-basis:100%;text-align:center}
+.pdf-doc{color:#1e293b;font-family:'Sarabun',sans-serif}
+.pdf-doc .pdfpage{width:210mm;height:297mm;margin:14px auto;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.18);position:relative;page-break-after:always}
+.pdf-doc .pdfpage::after{content:"";position:absolute;left:0;right:0;top:148.5mm;border-top:1.6px dashed #94a3b8}
+.pdf-doc .bill{width:100%;height:148.5mm;overflow:hidden;page-break-inside:avoid;position:relative}
+@media print{
+  body>*{display:none!important}
+  body{height:auto!important;overflow:visible!important;display:block!important;background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pdf-ov.show{display:block!important;position:static!important;background:#fff!important;overflow:visible!important}
+  .pdf-bar{display:none!important}
+  .pdf-doc .pdfpage{margin:0!important;box-shadow:none!important}
+  @page{size:A4;margin:0}
+}
 </style>
 </head>
 <body>
@@ -219,8 +239,8 @@ tbody tr:hover td{background:var(--bg3)}
     <div class="logo-sub">ระบบจัดการหอพัก</div>
   </div>
   <nav class="nav">
-    <button class="ni on" onclick="nav('bills',this)"><span style="font-size:16px">📋</span><span class="dot"></span>ค่าใช้จ่าย</button>
-    <button class="ni" onclick="nav('rooms',this)"><span style="font-size:16px">🏠</span><span class="dot"></span>ห้องพัก</button>
+    <button class="ni on" onclick="nav('rooms',this)"><span style="font-size:16px">🏠</span><span class="dot"></span>ห้องพัก</button>
+    <button class="ni" onclick="nav('bills',this)"><span style="font-size:16px">📋</span><span class="dot"></span>ค่าใช้จ่าย</button>
     <button class="ni" onclick="nav('meter',this)"><span style="font-size:16px">⚡</span><span class="dot"></span>จดมิเตอร์</button>
     <button class="ni" onclick="nav('report',this)"><span style="font-size:16px">📊</span><span class="dot"></span>รายรับ</button>
   </nav>
@@ -247,7 +267,7 @@ tbody tr:hover td{background:var(--bg3)}
 <div class="main">
 
 <!-- PAGE: ห้องพัก -->
-<div id="pg-rooms" class="page">
+<div id="pg-rooms" class="page on">
   <div class="topbar">
     <div class="pg-title" id="rooms-title">ห้องพักทั้งหมด</div>
     <div class="topbar-r">
@@ -263,7 +283,7 @@ tbody tr:hover td{background:var(--bg3)}
 </div>
 
 <!-- PAGE: ค่าใช้จ่าย -->
-<div id="pg-bills" class="page on">
+<div id="pg-bills" class="page">
   <div class="topbar">
     <div class="pg-title">ค่าใช้จ่ายประจำเดือน</div>
     <div class="topbar-r">
@@ -373,6 +393,16 @@ tbody tr:hover td{background:var(--bg3)}
 <div class="mo" id="m-detail"><div class="modal"><div class="mh"><div class="mt" id="det-t"></div><button class="mx" onclick="closeModal('m-detail')">×</button></div><div id="det-b"></div><div class="mf" id="det-f"></div></div></div>
 
 <div class="toast" id="toast"></div>
+
+<!-- PDF overlay (แสดงในแอป ไม่เปิดหน้าต่างใหม่ รองรับ iOS) -->
+<div class="pdf-ov" id="pdf-ov">
+  <div class="pdf-bar">
+    <button class="close" onclick="closePdfOverlay()">✕ ปิด</button>
+    <button class="save" onclick="window.print()">💾 บันทึกเป็น PDF</button>
+    <span class="hint">กด “บันทึกเป็น PDF” แล้วเลือก Save as PDF / บันทึกลงไฟล์ • กด “ปิด” เพื่อกลับเข้าแอป</span>
+  </div>
+  <div class="pdf-doc" id="pdf-doc"></div>
+</div>
 
 <!-- Debug Panel -->
 <div class="mo" id="m-debug"><div class="modal" style="width:500px">
@@ -501,7 +531,7 @@ function startListeners(){
     if(loaded.rooms&&loaded.bills&&loaded.meters&&loaded.buildings){
       _fbReady=true;
       syncStatus='ok'; updateSyncBadge();
-      populateMonthSelects();renderBldSidebar();renderRooms();renderBills();
+      populateMonthSelects();renderBldSidebar();renderRooms();
       checkOverdueBills(); // ✅ เช็คบิลค้างชำระทุกครั้งที่โหลดข้อมูล
     }
   }
@@ -750,7 +780,8 @@ function renderRooms(){
       <div class="rooms-grid">${g.rooms.map(r=>{
         const st=roomStatus(r);
         const cls=!r.tenant?'vac':st==='ค้างชำระ'?'owe':'occ';
-        const badge=!r.tenant?'<span class="badge b-gr">ว่าง</span>':st==='ค้างชำระ'?'<span class="badge b-r">ค้างชำระ</span>':st==='ชำระแล้ว'?'<span class="badge b-g">ชำระแล้ว</span>':'<span class="badge b-a">รอชำระ</span>';
+        const bcls=st==='ค้างชำระ'?'b-r':st==='ชำระแล้ว'?'b-g':'b-a';
+        const badge=!r.tenant?'<span class="badge b-gr">ว่าง</span>':`<span class="badge ${bcls}" style="cursor:pointer" onclick="event.stopPropagation();togStRoom('${r.id}')" title="กดเพื่อเปลี่ยนสถานะ">${st} ⇄</span>`;
         return`<div class="rc ${cls}" onclick="showDetail('${r.id}')">
           <div class="rc-id">${r.id}</div>
           <div class="rc-bld">${g.bld.name}${r.type?' · '+r.type:''}</div>
@@ -863,6 +894,8 @@ function renderBills(){
     </div>`}).join('');
 }
 function togSt(rid,mo){const b=bills.find(x=>x.room===rid&&x.month===mo);if(!b)return;const c={'รอชำระ':'ชำระแล้ว','ชำระแล้ว':'ค้างชำระ','ค้างชำระ':'รอชำระ'};b.status=c[b.status]||'ชำระแล้ว';const r=rooms.find(x=>x.id===rid);if(r)r.status=b.status;save();syncBill(b);if(r)syncRoom(r);renderBills();renderRooms();toast('→ '+b.status)}
+// เปลี่ยนสถานะจากหน้าห้องพัก (ใช้เดือนที่เลือกบนหน้าห้องพัก)
+function togStRoom(rid){const mo=document.getElementById('room-mo').value;const b=bills.find(x=>x.room===rid&&x.month===mo);if(!b){toast('ยังไม่มีบิลเดือนนี้ — สร้างบิลก่อน','err');return}togSt(rid,mo)}
 function openBillModal(){
   const occ=filtered().filter(r=>r.tenant);if(!occ.length){toast('ไม่มีผู้เช่า','err');return}
   document.getElementById('nb-room').innerHTML=occ.map(r=>`<option value="${r.id}">${r.id} — ${r.tenant}</option>`).join('');
@@ -1009,7 +1042,7 @@ function renderReport(){
 }
 
 // ===== PDF =====
-const LOGO_URL='https://drive.google.com/thumbnail?id=1rRaw8u9DFNYgYpdw26YeOIZ7EkLQdUP8&sz=w300';
+const LOGO_URL='logo-invoice.png'; // โลโก้จริงของหอบนใบแจ้งหนี้ (ไฟล์ในเครื่อง โหลดติดทุกอุปกรณ์)
 
 function getBldAddress(bld){
   if(bld.key==='place') return {name:'ชมดาว เพลส',addr:'ต.ทุ่งสุขลา อ.ศรีราชา จ.ชลบุรี 20230',tel:'โทร. 0923821754'};
@@ -1115,13 +1148,25 @@ function pdfWrap(content){
   return'<html><head><meta charset="UTF-8"><title>บิล Chomdao</title><link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600&family=Kanit:wght@500;600&display=swap" rel=stylesheet><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Sarabun,sans-serif;background:#e5e7eb;color:#1e293b}.bill{width:100%;height:148.5mm;overflow:hidden;page-break-inside:avoid;position:relative}.page{width:210mm;height:297mm;page-break-after:always;margin:14px auto;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.18);position:relative}.page::after{content:"";position:absolute;left:0;right:0;top:148.5mm;border-top:1.6px dashed #94a3b8}.toolbar{position:sticky;top:0;z-index:10;background:#1a365d;color:#fff;padding:12px 16px;display:flex;align-items:center;gap:14px;justify-content:center;flex-wrap:wrap;font-family:Sarabun,sans-serif}.toolbar button{padding:10px 24px;border:0;border-radius:8px;background:#FF6B2B;color:#fff;font-size:15px;font-weight:600;cursor:pointer;font-family:Sarabun,sans-serif}.toolbar .hint{font-size:13px;opacity:.9}@media print{@page{size:A4;margin:0}body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{margin:0;box-shadow:none;page-break-after:always}.toolbar{display:none}}</style></head><body><div class="toolbar"><button onclick="window.print()">💾 บันทึกเป็น PDF</button><span class="hint">กดปุ่มนี้ แล้วเลือกปลายทางเป็น “Save as PDF” เซฟเก็บไว้ ค่อยพิมพ์ทีหลัง</span></div>'+content+'</body></html>';
 }
 
+// แสดงบิลแบบ overlay ในแอป (ไม่เปิดหน้าต่างใหม่ → iOS กลับเข้าแอปได้)
+function openPdfOverlay(docHtml){
+  document.getElementById('pdf-doc').innerHTML=docHtml;
+  const ov=document.getElementById('pdf-ov');
+  ov.classList.add('show');
+  ov.scrollTop=0;
+}
+function closePdfOverlay(){
+  const ov=document.getElementById('pdf-ov');
+  ov.classList.remove('show');
+  document.getElementById('pdf-doc').innerHTML='';
+}
+
 function printBill(rid,mo){const b=bills.find(x=>x.room===rid&&x.month===mo);if(!b){toast('ไม่พบบิล','err');return}makePDF(b)}
 
 // บิลเดี่ยว — 1 ใบ ครึ่ง A4 (ครึ่งบน เว้นครึ่งล่าง)
 function makePDF(bill){
-  const b=billHTML(bill);
-  const content='<div class="page">'+b+'<div class="bill"></div></div>';
-  const w=window.open('','_blank','width=800,height=600');w.document.write(pdfWrap(content));w.document.close();
+  const content='<div class="pdfpage">'+billHTML(bill)+'<div class="bill"></div></div>';
+  openPdfOverlay(content);
 }
 
 // พิมพ์ทั้งหมด — จับคู่ 2 บิลต่อหน้า A4
@@ -1133,10 +1178,10 @@ function printAllBills(){
   for(let i=0;i<mb.length;i+=2){
     const b1=billHTML(mb[i]);
     const b2=mb[i+1]?billHTML(mb[i+1]):'<div class="bill"></div>';
-    pages+='<div class="page">'+b1+b2+'</div>';
+    pages+='<div class="pdfpage">'+b1+b2+'</div>';
   }
-  const w=window.open('','_blank','width=800,height=600');w.document.write(pdfWrap(pages));w.document.close();
-  toast('เปิด '+mb.length+' บิล ('+Math.ceil(mb.length/2)+' หน้า) — กด “บันทึกเป็น PDF” ในหน้าใหม่');
+  openPdfOverlay(pages);
+  toast('แสดง '+mb.length+' บิล ('+Math.ceil(mb.length/2)+' หน้า) — กด “บันทึกเป็น PDF”');
 }
 
 
@@ -1191,9 +1236,9 @@ async function debugTestLoad(){
 Object.assign(window, {
   toggleSidebar, nav, filterBld, openModal, closeModal,
   openBillModal, openTenantModal, showDetail, editRoomDetail,
-  removeTenant, delRoom, editBill, printBill, printAllBills,
+  removeTenant, delRoom, editBill, printBill, printAllBills, closePdfOverlay,
   saveBill, saveBld, saveRoom, saveTenant, saveAllMeters,
-  togSt, setSt, addExtra, updPreview, autoFillRent,
+  togSt, togStRoom, setSt, addExtra, updPreview, autoFillRent,
   mTab, mIn, mKey, updateRoomIdPreview,
   renderRooms, renderBills, renderMeters, renderReport,
   syncToSheet, forceRefresh,
