@@ -217,6 +217,11 @@ tbody tr:hover td{background:var(--bg3)}
 .pdf-doc .pdfpage{width:210mm;height:297mm;margin:14px auto;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.18);position:relative;page-break-after:always}
 .pdf-doc .pdfpage::after{content:"";position:absolute;left:0;right:0;top:148.5mm;border-top:1.6px dashed #94a3b8}
 .pdf-doc .bill{width:100%;height:148.5mm;overflow:hidden;page-break-inside:avoid;position:relative}
+/* รีเซ็ตไม่ให้ธีมมืดของแอปเล่นงานตารางบิล */
+.pdf-doc table{background:transparent;color:#1e293b}
+.pdf-doc thead th{background:transparent;text-transform:none;letter-spacing:normal}
+.pdf-doc tbody td{color:#1e293b;background:transparent}
+.pdf-doc tbody tr:hover td{background:transparent}
 @media print{
   body>*{display:none!important}
   body{height:auto!important;overflow:visible!important;display:block!important;background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
