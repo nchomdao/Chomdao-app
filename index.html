@@ -863,7 +863,8 @@ function buildBillItem(b,r){
   const ext=(b.extras||[]).reduce((s,e)=>s+(e.amt||0),0);
   const total=(b.rent||0)+(b.water||0)+(b.elec||0)+ext;
   const extraText=(b.extras||[]).map(e=>e.name+' '+Number(e.amt).toLocaleString()).join(', ');
-  return {to:r.lineUserId,room:b.room,tenant:b.tenant||'',month:MFULL[b.month]||b.month,rent:Number(b.rent||0).toLocaleString(),water:Number(b.water||0).toLocaleString(),elec:Number(b.elec||0).toLocaleString(),extra:extraText||'-',total:total.toLocaleString(),qr:new URL('qr-payment.png',location.href).href};
+  const mi=getMeterInfo(b);
+  return {to:r.lineUserId,room:b.room,tenant:b.tenant||'',month:MFULL[b.month]||b.month,rent:Number(b.rent||0).toLocaleString(),water:Number(b.water||0).toLocaleString(),waterInfo:mi.wUnits+' หน่วย × '+mi.wRate+' บ.',elec:Number(b.elec||0).toLocaleString(),elecInfo:mi.eUnits+' หน่วย × '+mi.eRate+' บ.',extra:extraText||'-',total:total.toLocaleString(),qr:new URL('qr-payment.png',location.href).href};
 }
 async function postBills(items){
   try{await fetch(BILL_WEBHOOK_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({bills:items})});return true;}
