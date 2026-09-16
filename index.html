@@ -295,6 +295,7 @@ tbody tr:hover td{background:var(--bg3)}
       <select id="bill-mo" onchange="setMonth(this.value)" style="padding:7px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rds);color:var(--text);font-family:'Sarabun',sans-serif;font-size:14px"></select>
       <button class="btn" onclick="openBillModal()">+ บันทึก</button>
       <button class="btn btn-g" onclick="printAllBills()">📄 บิลทั้งหมด (PDF)</button>
+      <button class="btn btn-g" onclick="sendAllBillsLine()">📤 ส่ง LINE ทั้งหมด</button>
     </div>
   </div>
   <div class="content">
@@ -856,6 +857,36 @@ function removeTenant(rid){if(!confirm('ยืนยัน?'))return;const r=roo
 function clearLine(rid){if(!confirm('ล้างการเชื่อม LINE ของห้อง '+rid+'?'))return;const r=rooms.find(x=>x.id===rid);if(r){delete r.lineUserId;syncRoom(r)}renderRooms();closeModal('m-detail');toast('ล้าง LINE แล้ว')}
 function delRoom(rid){if(!confirm('ลบห้อง '+rid+'?'))return;rooms=rooms.filter(x=>x.id!==rid);fbDeleteRoom(rid);renderRooms();closeModal('m-detail');toast('ลบห้องสำเร็จ')}
 
+// ===== ส่งบิลทาง LINE (ผ่าน Make webhook) =====
+const BILL_WEBHOOK_URL='https://hook.us2.make.com/49vhz490ptcotzzjnnjdpvja4lgita1x';
+function buildBillItem(b,r){
+  const ext=(b.extras||[]).reduce((s,e)=>s+(e.amt||0),0);
+  const total=(b.rent||0)+(b.water||0)+(b.elec||0)+ext;
+  const extraText=(b.extras||[]).map(e=>e.name+' '+Number(e.amt).toLocaleString()).join(', ');
+  return {to:r.lineUserId,room:b.room,tenant:b.tenant||'',month:MFULL[b.month]||b.month,rent:Number(b.rent||0).toLocaleString(),water:Number(b.water||0).toLocaleString(),elec:Number(b.elec||0).toLocaleString(),extra:extraText||'-',total:total.toLocaleString(),qr:new URL('qr-payment.png',location.href).href};
+}
+async function postBills(items){
+  try{await fetch(BILL_WEBHOOK_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({bills:items})});return true;}
+  catch(e){console.error('postBills',e);return false;}
+}
+async function sendBillLine(rid,mo){
+  const b=bills.find(x=>x.room===rid&&x.month===mo);if(!b){toast('ไม่พบบิล','err');return}
+  const r=rooms.find(x=>x.id===rid);if(!r||!r.lineUserId){toast('ห้องนี้ยังไม่เชื่อม LINE','err');return}
+  if(!confirm('ส่งบิลห้อง '+rid+' ทาง LINE?'))return;
+  const ok=await postBills([buildBillItem(b,r)]);
+  toast(ok?'ส่งบิลห้อง '+rid+' ทาง LINE แล้ว ✓':'ส่งไม่สำเร็จ ลองใหม่',ok?'ok':'err');
+}
+async function sendAllBillsLine(){
+  const mo=document.getElementById('bill-mo').value;const fr=filtered().map(r=>r.id);
+  const mb=bills.filter(b=>b.month===mo&&(curBld==='all'||fr.includes(b.room)));
+  const items=[];let skipped=0;
+  mb.forEach(b=>{const r=rooms.find(x=>x.id===b.room);if(r&&r.lineUserId)items.push(buildBillItem(b,r));else skipped++});
+  if(!items.length){toast('ไม่มีห้องที่เชื่อม LINE ในเดือนนี้','err');return}
+  if(!confirm('ส่งบิล '+items.length+' ห้อง ทาง LINE?'+(skipped?'\n('+skipped+' ห้องยังไม่เชื่อม LINE — จะข้าม)':'')))return;
+  const ok=await postBills(items);
+  toast(ok?('ส่งบิล '+items.length+' ห้อง ทาง LINE แล้ว ✓'+(skipped?' (ข้าม '+skipped+')':'')):'ส่งไม่สำเร็จ ลองใหม่',ok?'ok':'err');
+}
+
 // ===== BILLS =====
 function renderBills(){
   const mo=document.getElementById('bill-mo').value;const fr=filtered().map(r=>r.id);
@@ -881,7 +912,7 @@ function renderBills(){
     const ext=(b.extras||[]).reduce((s,e)=>s+(e.amt||0),0);const total=(b.rent||0)+(b.water||0)+(b.elec||0)+ext;
     const extL=(b.extras||[]).length?(b.extras||[]).map(e=>e.name+' '+Number(e.amt).toLocaleString()).join(', '):'—';
     const sc=b.status==='ชำระแล้ว'?'b-g':b.status==='ค้างชำระ'?'b-r':'b-a';
-    return`<tr><td style="font-weight:600">${b.room}</td><td style="color:${bld.color};font-size:11px">${bld.name}</td><td>${b.tenant}</td><td>${Number(b.rent||0).toLocaleString()}</td><td>${Number(b.water||0).toLocaleString()}</td><td>${Number(b.elec||0).toLocaleString()}</td><td style="font-size:10px;color:var(--text2);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${extL}">${extL}</td><td style="font-weight:600;color:var(--green2)">${total.toLocaleString()}</td><td><span class="badge ${sc}" style="cursor:pointer" onclick="togSt('${b.room}','${mo}')">${b.status} ⇄</span></td><td style="display:flex;gap:3px"><button class="btn btn-sm" onclick="editBill('${b.room}','${mo}')">✏️</button><button class="btn btn-sm" onclick="printBill('${b.room}','${mo}')">🖨</button></td></tr>`}).join('');
+    return`<tr><td style="font-weight:600">${b.room}</td><td style="color:${bld.color};font-size:11px">${bld.name}</td><td>${b.tenant}</td><td>${Number(b.rent||0).toLocaleString()}</td><td>${Number(b.water||0).toLocaleString()}</td><td>${Number(b.elec||0).toLocaleString()}</td><td style="font-size:10px;color:var(--text2);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${extL}">${extL}</td><td style="font-weight:600;color:var(--green2)">${total.toLocaleString()}</td><td><span class="badge ${sc}" style="cursor:pointer" onclick="togSt('${b.room}','${mo}')">${b.status} ⇄</span></td><td style="display:flex;gap:3px"><button class="btn btn-sm" onclick="editBill('${b.room}','${mo}')">✏️</button><button class="btn btn-sm" onclick="printBill('${b.room}','${mo}')">🖨</button>${r&&r.lineUserId?`<button class="btn btn-sm" onclick="sendBillLine('${b.room}','${mo}')" title="ส่งบิลทาง LINE">📤</button>`:''}</td></tr>`}).join('');
   // Mobile cards
   if(cards) cards.innerHTML=mb.map(b=>{
     const r=rooms.find(x=>x.id===b.room);const bld=r?getBld(r):{name:'?',color:'#666'};
@@ -906,6 +937,7 @@ function renderBills(){
         <div style="display:flex;gap:6px">
           <button class="btn btn-sm" onclick="editBill('${b.room}','${mo}')" style="padding:6px 10px">✏️</button>
           <button class="btn btn-sm" onclick="printBill('${b.room}','${mo}')" style="padding:6px 10px" title="ทำเป็น PDF">📄</button>
+          ${r&&r.lineUserId?`<button class="btn btn-sm" onclick="sendBillLine('${b.room}','${mo}')" style="padding:6px 10px" title="ส่งบิลทาง LINE">📤</button>`:''}
         </div>
       </div>
     </div>`}).join('');
@@ -1306,7 +1338,7 @@ async function debugTestLoad(){
 Object.assign(window, {
   toggleSidebar, nav, filterBld, openModal, closeModal,
   openBillModal, openTenantModal, showDetail, editRoomDetail,
-  removeTenant, delRoom, clearLine, editBill, printBill, printAllBills, closePdfOverlay, savePdf,
+  removeTenant, delRoom, clearLine, editBill, printBill, printAllBills, closePdfOverlay, savePdf, sendBillLine, sendAllBillsLine,
   saveBill, saveBld, saveRoom, saveTenant, saveAllMeters,
   togSt, togStRoom, setSt, addExtra, updPreview, autoFillRent,
   mTab, mIn, mKey, updateRoomIdPreview,
