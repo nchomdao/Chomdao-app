@@ -450,6 +450,12 @@ let syncStatus='idle';
 let _fbReady=false; // true เมื่อ Firestore โหลดข้อมูลครั้งแรกเสร็จ
 
 // ===== FIRESTORE HELPERS =====
+// ===== Dirty tracking: เขียนลง Firestore เฉพาะข้อมูลที่เปลี่ยน (กันโควตา write หมด) =====
+const _dirtyMeters=new Set(), _dirtyBills=new Set(), _dirtyRooms=new Set();
+function markMeter(k){ _dirtyMeters.add(k) }
+function markBill(b){ if(b) _dirtyBills.add(b.room+'_'+b.month) }
+function markRoom(r){ if(r) _dirtyRooms.add(r.id) }
+
 async function fbSaveRoom(room){
   try{ await setDoc(doc(db,'rooms',room.id), room); }catch(e){ console.error('fbSaveRoom',e); }
 }
@@ -469,13 +475,14 @@ async function fbSaveBuilding(bld){
   try{ await setDoc(doc(db,'buildings',bld.key), bld); }catch(e){ console.error('fbSaveBuilding',e); }
 }
 async function fbSaveAllMeters(){
-  try{
-    const batch=writeBatch(db);
-    Object.keys(meters).forEach(k=>{
-      batch.set(doc(db,'meters',k), {key:k, prev:meters[k].prev||0, curr:meters[k].curr||0});
-    });
-    await batch.commit();
-  }catch(e){ console.error('fbSaveAllMeters',e); }
+  const keys=[..._dirtyMeters].filter(k=>meters[k]);
+  if(!keys.length) return;           // ไม่มีอะไรเปลี่ยน → ไม่ต้องเขียนเลย
+  const batch=writeBatch(db);
+  keys.forEach(k=>{
+    batch.set(doc(db,'meters',k), {key:k, prev:meters[k].prev||0, curr:meters[k].curr||0});
+  });
+  await batch.commit();              // ปล่อย error ขึ้นไปให้ syncToSheet แจ้งเตือน (จะได้รู้ว่าเซฟไม่ผ่าน)
+  keys.forEach(k=>_dirtyMeters.delete(k));
 }
 
 // Aliases ให้โค้ดเดิมเรียกได้
@@ -486,17 +493,25 @@ function syncBuilding(bld){ fbSaveBuilding(bld); }
 async function syncToSheet(){
   syncStatus='syncing'; updateSyncBadge();
   try{
-    // save rooms
-    const rb=writeBatch(db);
-    rooms.forEach(r=>rb.set(doc(db,'rooms',r.id),r));
-    await rb.commit();
-    // save bills
-    const bb=writeBatch(db);
-    bills.forEach(b=>{
-      const key=b.room+'_'+b.month;
-      bb.set(doc(db,'bills',key),{...b, total:calcTotal(b), extras:JSON.stringify(b.extras||[])});
-    });
-    await bb.commit();
+    // save rooms (เฉพาะที่เปลี่ยน)
+    const drooms=rooms.filter(r=>_dirtyRooms.has(r.id));
+    if(drooms.length){
+      const rb=writeBatch(db);
+      drooms.forEach(r=>rb.set(doc(db,'rooms',r.id),r));
+      await rb.commit();
+      drooms.forEach(r=>_dirtyRooms.delete(r.id));
+    }
+    // save bills (เฉพาะที่เปลี่ยน)
+    const dbills=bills.filter(b=>_dirtyBills.has(b.room+'_'+b.month));
+    if(dbills.length){
+      const bb=writeBatch(db);
+      dbills.forEach(b=>{
+        const key=b.room+'_'+b.month;
+        bb.set(doc(db,'bills',key),{...b, total:calcTotal(b), extras:JSON.stringify(b.extras||[])});
+      });
+      await bb.commit();
+      dbills.forEach(b=>_dirtyBills.delete(b.room+'_'+b.month));
+    }
     // save meters
     await fbSaveAllMeters();
     // save buildings
@@ -1013,7 +1028,7 @@ function renderMT(type,tbId,occ,mo,pm){
 let _meterSyncTimer=null;
 function mIn(el){
   const rid=el.dataset.r;const type=el.dataset.t;const field=el.dataset.f;const mo=document.getElementById('meter-mo').value;
-  const k=rid+'_'+mo+'_'+type;if(!meters[k])meters[k]={};meters[k][field]=parseFloat(el.value)||0;
+  const k=rid+'_'+mo+'_'+type;if(!meters[k])meters[k]={};meters[k][field]=parseFloat(el.value)||0;markMeter(k);
   const prev=meters[k].prev||0;const curr=meters[k].curr||0;const u=calcUnits(prev,curr);const rate=getRate(rid)[type];
   document.getElementById('u_'+type+'_'+rid).textContent=curr?u:'—';document.getElementById('a_'+type+'_'+rid).textContent=u*rate?(u*rate).toLocaleString():'—';
   if(field==='curr'){el.style.borderColor=el.value?'':'var(--amber)';el.style.background=el.value?'':'rgba(245,158,11,.05)'}
@@ -1052,13 +1067,14 @@ function saveAllMeters(){
     const elec=Math.round(calcUnits(ePrev,eCurr)*rt.elec);
     const water=Math.round(calcUnits(wPrev,wCurr)*rt.water);
     if(!meters[ek]) meters[ek]={};
-    meters[ek].prev=ePrev; meters[ek].curr=eCurr;
+    meters[ek].prev=ePrev; meters[ek].curr=eCurr; markMeter(ek);
     if(!meters[wk]) meters[wk]={};
-    meters[wk].prev=wPrev; meters[wk].curr=wCurr;
+    meters[wk].prev=wPrev; meters[wk].curr=wCurr; markMeter(wk);
     let bill=bills.find(b=>b.room===r.id&&b.month===mo);
     if(bill){bill.elec=elec;bill.water=water;bill.tenant=r.tenant;bill.rent=Number(r.price)}else{
       const pm=prevMonth(mo);const pb=pm?bills.find(b=>b.room===r.id&&b.month===pm):null;
       bill={room:r.id,month:mo,tenant:r.tenant,rent:Number(r.price),water,elec,extras:pb&&pb.extras?JSON.parse(JSON.stringify(pb.extras)):[],status:'รอชำระ'};bills.push(bill)}
+    markBill(bill);
     c++;
   });
   save();
