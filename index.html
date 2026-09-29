@@ -627,11 +627,13 @@ function getBld(r){const b=buildings.find(b=>r.id.startsWith(b.prefix));return b
 function getFloor(r){const b=getBld(r);const num=r.id.replace(b.prefix,'');return num.length>=3?'ชั้น '+num.charAt(0):'ชั้น 1'}
 // คำนวณหน่วยใช้งาน รองรับมิเตอร์วนรอบ (9999→0 หรือ 99999→0)
 function calcUnits(prev,curr){
-  if(!curr && curr!==0) return 0;
-  if(curr>=prev) return curr-prev;
-  // มิเตอร์วนรอบ: ถ้า prev ≤ 9999 → วนที่ 10000, ถ้า prev ≤ 99999 → วนที่ 100000
+  prev=Number(prev)||0; curr=Number(curr)||0;
+  if(curr<=0) return 0;              // ยังไม่กรอกเลขมิเตอร์เดือนนี้ (curr=0) → ไม่คิดหน่วย
+  if(curr>=prev) return curr-prev;   // ปกติ (เลขเพิ่มขึ้น)
+  // curr < prev: คิดว่า "มิเตอร์วนรอบ" เฉพาะเมื่อ prev ใกล้เต็มสเกลจริงๆ เท่านั้น
   const max=prev<=9999?10000:100000;
-  return max-prev+curr;
+  if(prev>=max-50) return max-prev+curr;
+  return 0;                          // อ่านย้อนหลังผิดปกติ (พิมพ์ผิด/ยังไม่กรอก) → ไม่คิดหน่วย กันบิลบานปลาย
 }
 function getRate(rid){
   // Chomdaoplace: ไฟ 8, น้ำ 28
