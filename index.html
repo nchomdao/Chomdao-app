@@ -217,6 +217,17 @@ tbody tr:hover td{background:var(--bg3)}
 .pdf-doc .pdfpage{width:210mm;height:297mm;margin:14px auto;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.18);position:relative;page-break-after:always}
 .pdf-doc .pdfpage::after{content:"";position:absolute;left:0;right:0;top:148.5mm;border-top:1.6px dashed #94a3b8}
 .pdf-doc .bill{width:100%;height:148.5mm;overflow:hidden;page-break-inside:avoid;position:relative}
+/* หน้าเต็ม A4 ไม่มีเส้นประกลาง (ใช้กับตารางเช็คมิเตอร์) */
+.pdf-doc .pdfpage.plain::after{display:none}
+.pdf-doc .msheet{padding:12mm 10mm;font-family:'Sarabun',sans-serif;color:#111}
+.pdf-doc .msheet h2{font-family:'Kanit',sans-serif;font-size:26px;margin:0 0 4px;color:#1E3A5F}
+.pdf-doc .msheet .sub{font-size:17px;color:#444;margin-bottom:12px}
+.pdf-doc .msheet table{width:100%;border-collapse:collapse}
+.pdf-doc .msheet th{background:#1E3A5F;color:#fff;font-size:17px;padding:8px 6px;border:1px solid #1E3A5F}
+.pdf-doc .msheet td{font-size:18px;padding:7px 6px;border:1px solid #9ca3af}
+.pdf-doc .msheet td.rm{font-weight:700;font-size:21px}
+.pdf-doc .msheet td.num{text-align:right}
+.pdf-doc .msheet tr:nth-child(even) td{background:#f3f4f6}
 /* รีเซ็ตไม่ให้ธีมมืดของแอปเล่นงานตารางบิล */
 .pdf-doc table{background:transparent;color:#1e293b}
 .pdf-doc thead th{background:transparent;text-transform:none;letter-spacing:normal}
@@ -295,12 +306,12 @@ tbody tr:hover td{background:var(--bg3)}
       <select id="bill-mo" onchange="setMonth(this.value)" style="padding:7px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rds);color:var(--text);font-family:'Sarabun',sans-serif;font-size:14px"></select>
       <button class="btn" onclick="openBillModal()">+ บันทึก</button>
       <button class="btn btn-g" onclick="printAllBills()">📄 บิลทั้งหมด (PDF)</button>
-      <button class="btn btn-g" onclick="sendAllBillsLine()">📤 ส่ง LINE ทั้งหมด</button>
+      <button class="btn btn-g" id="btn-send-sel" onclick="sendSelectedBillsLine()" disabled>📤 ส่ง LINE ที่เลือก (0)</button>
     </div>
   </div>
   <div class="content">
     <div class="tw bill-desktop"><table><thead><tr>
-    <th>ห้อง</th><th>หอพัก</th><th>ผู้เช่า</th><th>ค่าห้อง</th><th>ค่าน้ำ</th><th>ค่าไฟ</th><th>อื่นๆ</th><th>รวม</th><th>สถานะ</th><th>จัดการ</th>
+    <th style="width:34px;text-align:center"><input type="checkbox" id="bill-chk-all" onchange="toggleAllBills(this)" title="เลือกทั้งหมด" style="width:17px;height:17px;cursor:pointer"></th><th>ห้อง</th><th>หอพัก</th><th>ผู้เช่า</th><th>ค่าห้อง</th><th>ค่าน้ำ</th><th>ค่าไฟ</th><th>อื่นๆ</th><th>รวม</th><th>สถานะ</th><th>จัดการ</th>
   </tr></thead><tbody id="bill-tb"></tbody></table></div>
     <div class="bill-mobile" id="bill-cards"></div>
   </div>
@@ -326,6 +337,7 @@ tbody tr:hover td{background:var(--bg3)}
     <div style="display:flex;gap:4px;margin-bottom:14px">
       <button class="btn meter-tab at" onclick="mTab('elec',this)" id="mt-e">⚡ ค่าไฟ</button>
       <button class="btn meter-tab" onclick="mTab('water',this)" id="mt-w">💧 ค่าน้ำ</button>
+      <button class="btn btn-g" onclick="printMeterSheet()" style="margin-left:auto" title="พิมพ์ตารางตัวใหญ่ ไว้เทียบกับที่จดมาหน้างาน">🖨 พิมพ์ตารางเช็ค</button>
     </div>
     <div id="meter-elec"><div class="tw"><table><thead><tr><th>ห้อง</th><th>หอพัก</th><th>ผู้เช่า</th><th>เลขเดิม</th><th>เลขใหม่</th><th>หน่วย</th><th>บาท</th></tr></thead><tbody id="me-tb"></tbody></table></div></div>
     <div id="meter-water" style="display:none"><div class="tw"><table><thead><tr><th>ห้อง</th><th>หอพัก</th><th>ผู้เช่า</th><th>เลขเดิม</th><th>เลขใหม่</th><th>หน่วย</th><th>บาท</th></tr></thead><tbody id="mw-tb"></tbody></table></div></div>
@@ -895,16 +907,47 @@ async function sendBillLine(rid,mo){
   const ok=await postBills([buildBillItem(b,r)]);
   toast(ok?'ส่งบิลห้อง '+rid+' ทาง LINE แล้ว ✓':'ส่งไม่สำเร็จ ลองใหม่',ok?'ok':'err');
 }
-async function sendAllBillsLine(){
-  const mo=document.getElementById('bill-mo').value;const fr=filtered().map(r=>r.id);
-  const mb=bills.filter(b=>b.month===mo&&(curBld==='all'||fr.includes(b.room)));
-  const items=[];let skipped=0;
-  mb.forEach(b=>{const r=rooms.find(x=>x.id===b.room);if(r&&r.lineUserId)items.push(buildBillItem(b,r));else skipped++});
-  if(!items.length){toast('ไม่มีห้องที่เชื่อม LINE ในเดือนนี้','err');return}
-  if(!confirm('ส่งบิล '+items.length+' ห้อง ทาง LINE?'+(skipped?'\n('+skipped+' ห้องยังไม่เชื่อม LINE — จะข้าม)':'')))return;
-  const ok=await postBills(items);
-  toast(ok?('ส่งบิล '+items.length+' ห้อง ทาง LINE แล้ว ✓'+(skipped?' (ข้าม '+skipped+')':'')):'ส่งไม่สำเร็จ ลองใหม่',ok?'ok':'err');
+// ===== เลือกห้อง → ส่งเฉพาะที่เลือก =====
+function selectedRooms(){
+  return [...new Set([...document.querySelectorAll('.bill-chk:checked')].map(c=>c.dataset.room))];
 }
+function updateSelCount(){
+  const n=selectedRooms().length;
+  const btn=document.getElementById('btn-send-sel');
+  if(btn){ btn.textContent='📤 ส่ง LINE ที่เลือก ('+n+')'; btn.disabled=(n===0); }
+  const all=document.getElementById('bill-chk-all');
+  const total=new Set([...document.querySelectorAll('.bill-chk')].map(c=>c.dataset.room)).size;
+  if(all) all.checked=(total>0 && n===total);
+}
+// ติ๊ก 1 ช่อง → sync ให้ตรงกันทั้งมุมมองตาราง (desktop) และการ์ด (มือถือ)
+function onBillChk(el){
+  document.querySelectorAll('.bill-chk[data-room="'+el.dataset.room+'"]').forEach(c=>{c.checked=el.checked});
+  updateSelCount();
+}
+function toggleAllBills(el){
+  document.querySelectorAll('.bill-chk').forEach(c=>{c.checked=el.checked});
+  updateSelCount();
+}
+async function sendSelectedBillsLine(){
+  const mo=document.getElementById('bill-mo').value;
+  const picked=selectedRooms();
+  if(!picked.length){toast('ยังไม่ได้เลือกห้อง','err');return}
+  const items=[];
+  picked.forEach(rid=>{
+    const b=bills.find(x=>x.room===rid&&x.month===mo);
+    const r=rooms.find(x=>x.id===rid);
+    if(b&&r&&r.lineUserId) items.push(buildBillItem(b,r));
+  });
+  if(!items.length){toast('ห้องที่เลือกยังไม่เชื่อม LINE','err');return}
+  if(!confirm('ส่งบิล '+items.length+' ห้อง ทาง LINE?\n'+picked.join(', ')))return;
+  const ok=await postBills(items);
+  if(ok){
+    toast('ส่งบิล '+items.length+' ห้อง ทาง LINE แล้ว ✓');
+    document.querySelectorAll('.bill-chk').forEach(c=>{c.checked=false});
+    updateSelCount();
+  } else toast('ส่งไม่สำเร็จ ลองใหม่','err');
+}
+
 
 // ===== BILLS =====
 function renderBills(){
@@ -921,7 +964,7 @@ function renderBills(){
   const tb=document.getElementById('bill-tb');
   const cards=document.getElementById('bill-cards');
   if(!mb.length){
-    if(tb)tb.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:28px;color:var(--text3)">ยังไม่มีข้อมูลเดือนนี้</td></tr>`;
+    if(tb)tb.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:28px;color:var(--text3)">ยังไม่มีข้อมูลเดือนนี้</td></tr>`;
     if(cards)cards.innerHTML=`<div style="text-align:center;padding:28px;color:var(--text3)">ยังไม่มีข้อมูลเดือนนี้</div>`;
     return;
   }
@@ -931,7 +974,7 @@ function renderBills(){
     const ext=(b.extras||[]).reduce((s,e)=>s+(e.amt||0),0);const total=(b.rent||0)+(b.water||0)+(b.elec||0)+ext;
     const extL=(b.extras||[]).length?(b.extras||[]).map(e=>e.name+' '+Number(e.amt).toLocaleString()).join(', '):'—';
     const sc=b.status==='ชำระแล้ว'?'b-g':b.status==='ค้างชำระ'?'b-r':'b-a';
-    return`<tr><td style="font-weight:600">${b.room}</td><td style="color:${bld.color};font-size:11px">${bld.name}</td><td>${b.tenant}</td><td>${Number(b.rent||0).toLocaleString()}</td><td>${Number(b.water||0).toLocaleString()}</td><td>${Number(b.elec||0).toLocaleString()}</td><td style="font-size:10px;color:var(--text2);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${extL}">${extL}</td><td style="font-weight:600;color:var(--green2)">${total.toLocaleString()}</td><td><span class="badge ${sc}" style="cursor:pointer" onclick="togSt('${b.room}','${mo}')">${b.status} ⇄</span></td><td style="display:flex;gap:3px"><button class="btn btn-sm" onclick="editBill('${b.room}','${mo}')">✏️</button><button class="btn btn-sm" onclick="printBill('${b.room}','${mo}')">🖨</button>${r&&r.lineUserId?`<button class="btn btn-sm" onclick="sendBillLine('${b.room}','${mo}')" title="ส่งบิลทาง LINE">📤</button>`:''}</td></tr>`}).join('');
+    return`<tr><td style="text-align:center">${r&&r.lineUserId?`<input type="checkbox" class="bill-chk" data-room="${b.room}" onchange="onBillChk(this)" style="width:17px;height:17px;cursor:pointer">`:`<span style="color:var(--text3)" title="ยังไม่เชื่อม LINE">–</span>`}</td><td style="font-weight:600">${b.room}</td><td style="color:${bld.color};font-size:11px">${bld.name}</td><td>${b.tenant}</td><td>${Number(b.rent||0).toLocaleString()}</td><td>${Number(b.water||0).toLocaleString()}</td><td>${Number(b.elec||0).toLocaleString()}</td><td style="font-size:10px;color:var(--text2);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${extL}">${extL}</td><td style="font-weight:600;color:var(--green2)">${total.toLocaleString()}</td><td><span class="badge ${sc}" style="cursor:pointer" onclick="togSt('${b.room}','${mo}')">${b.status} ⇄</span></td><td style="display:flex;gap:3px"><button class="btn btn-sm" onclick="editBill('${b.room}','${mo}')">✏️</button><button class="btn btn-sm" onclick="printBill('${b.room}','${mo}')">🖨</button>${r&&r.lineUserId?`<button class="btn btn-sm" onclick="sendBillLine('${b.room}','${mo}')" title="ส่งบิลทาง LINE">📤</button>`:''}</td></tr>`}).join('');
   // Mobile cards
   if(cards) cards.innerHTML=mb.map(b=>{
     const r=rooms.find(x=>x.id===b.room);const bld=r?getBld(r):{name:'?',color:'#666'};
@@ -941,7 +984,7 @@ function renderBills(){
     const bg=b.status==='ชำระแล้ว'?'rgba(16,185,129,.08)':b.status==='ค้างชำระ'?'rgba(239,68,68,.08)':'rgba(245,158,11,.05)';
     return`<div class="bill-card" style="background:${bg};border:1px solid var(--border2);border-radius:var(--rds);padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div><span style="font-weight:700;font-size:16px">${b.room}</span> <span style="color:${bld.color};font-size:11px">${bld.name}</span></div>
+        <div style="display:flex;align-items:center;gap:9px">${r&&r.lineUserId?`<input type="checkbox" class="bill-chk" data-room="${b.room}" onchange="onBillChk(this)" style="width:19px;height:19px;flex:0 0 auto;cursor:pointer">`:''}<span style="font-weight:700;font-size:16px">${b.room}</span> <span style="color:${bld.color};font-size:11px">${bld.name}</span></div>
         <span class="badge ${sc}" style="cursor:pointer;font-size:13px;padding:4px 10px" onclick="togSt('${b.room}','${mo}')">${b.status} ⇄</span>
       </div>
       <div style="color:var(--text2);font-size:12px;margin-bottom:6px">${b.tenant}</div>
@@ -960,6 +1003,8 @@ function renderBills(){
         </div>
       </div>
     </div>`}).join('');
+  const ca=document.getElementById('bill-chk-all'); if(ca) ca.checked=false;
+  updateSelCount();
 }
 function togSt(rid,mo){const b=bills.find(x=>x.room===rid&&x.month===mo);if(!b)return;const c={'รอชำระ':'ชำระแล้ว','ชำระแล้ว':'ค้างชำระ','ค้างชำระ':'รอชำระ'};b.status=c[b.status]||'ชำระแล้ว';const r=rooms.find(x=>x.id===rid);if(r)r.status=b.status;save();syncBill(b);if(r)syncRoom(r);renderBills();renderRooms();toast('→ '+b.status)}
 // เปลี่ยนสถานะจากหน้าห้องพัก (ใช้เดือนที่เลือกบนหน้าห้องพัก)
@@ -1307,6 +1352,45 @@ function printAllBills(){
 }
 
 
+// ===== ตารางเช็คมิเตอร์ (ตัวใหญ่ ไว้เทียบกับที่จดมาหน้างาน) =====
+function printMeterSheet(){
+  const mo=document.getElementById('meter-mo').value;
+  const occ=filtered().filter(r=>r.tenant);
+  if(!occ.length){toast('ไม่มีห้องที่มีผู้เช่า','err');return}
+  const pmAny=prevMonthAny(mo);
+  const ROWS=22; // จำนวนแถวต่อหน้า A4 (ตัวหนังสือใหญ่)
+  const bldName = curBld==='all' ? 'ทุกหอพัก' : ((buildings.find(x=>x.key===curBld)||{}).name||'');
+  const rowHtml=(r,type)=>{
+    const k=r.id+'_'+mo+'_'+type, pk=r.id+'_'+pmAny+'_'+type;
+    const d=meters[k]||{};
+    const prev=d.prev||(meters[pk]?meters[pk].curr:0)||0;
+    const curr=d.curr||0;
+    const u=calcUnits(prev,curr);
+    const rate=getRate(r.id)[type];
+    return '<tr><td class="rm">'+r.id+'</td><td>'+(r.tenant||'-')+'</td>'
+      +'<td class="num">'+prev.toLocaleString()+'</td>'
+      +'<td class="num">'+(curr?curr.toLocaleString():'—')+'</td>'
+      +'<td class="num">'+(curr?u.toLocaleString():'—')+'</td>'
+      +'<td class="num">'+(curr?(u*rate).toLocaleString():'—')+'</td></tr>';
+  };
+  let pages='';
+  [['elec','⚡ ค่าไฟ'],['water','💧 ค่าน้ำ']].forEach(function(pair){
+    const type=pair[0], label=pair[1];
+    const totalPages=Math.ceil(occ.length/ROWS);
+    for(let i=0;i<occ.length;i+=ROWS){
+      const chunk=occ.slice(i,i+ROWS);
+      pages+='<div class="pdfpage plain"><div class="msheet">'
+        +'<h2>ตารางเช็คมิเตอร์ '+label+'</h2>'
+        +'<div class="sub">'+(MFULL[mo]||mo)+' · '+bldName+' · หน้า '+(Math.floor(i/ROWS)+1)+'/'+totalPages+'</div>'
+        +'<table><thead><tr><th>ห้อง</th><th>ผู้เช่า</th><th>เลขเดิม</th><th>เลขใหม่</th><th>หน่วย</th><th>เป็นเงิน</th></tr></thead><tbody>'
+        +chunk.map(function(r){return rowHtml(r,type)}).join('')
+        +'</tbody></table></div></div>';
+    }
+  });
+  openPdfOverlay(pages);
+  toast('ตารางเช็คมิเตอร์ '+occ.length+' ห้อง — กดพิมพ์ หรือ “บันทึกเป็น PDF”');
+}
+
 // ===== OPEN ROOM MODAL =====
 document.getElementById('m-room').querySelector('.btn-p').addEventListener('click',function(e){e.stopPropagation()});
 function openRoomModal(){
@@ -1358,7 +1442,8 @@ async function debugTestLoad(){
 Object.assign(window, {
   toggleSidebar, nav, filterBld, openModal, closeModal,
   openBillModal, openTenantModal, showDetail, editRoomDetail,
-  removeTenant, delRoom, clearLine, editBill, printBill, printAllBills, closePdfOverlay, savePdf, sendBillLine, sendAllBillsLine,
+  removeTenant, delRoom, clearLine, editBill, printBill, printAllBills, closePdfOverlay, savePdf, sendBillLine,
+  sendSelectedBillsLine, toggleAllBills, onBillChk, updateSelCount, printMeterSheet,
   saveBill, saveBld, saveRoom, saveTenant, saveAllMeters,
   togSt, togStRoom, setSt, addExtra, updPreview, autoFillRent,
   mTab, mIn, mKey, updateRoomIdPreview,
