@@ -310,6 +310,13 @@ tbody tr:hover td{background:var(--bg3)}
     <div class="tw bill-desktop"><table><thead><tr>
     <th style="width:34px;text-align:center"><input type="checkbox" id="bill-chk-all" onchange="toggleAllBills(this)" title="เลือกทั้งหมด" style="width:17px;height:17px;cursor:pointer"></th><th>ห้อง</th><th>หอพัก</th><th>ผู้เช่า</th><th>ค่าห้อง</th><th>ค่าน้ำ</th><th>ค่าไฟ</th><th>อื่นๆ</th><th>รวม</th><th>สถานะ</th><th>จัดการ</th>
   </tr></thead><tbody id="bill-tb"></tbody></table></div>
+    <div class="bill-mobile" style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rds)">
+        <input type="checkbox" id="bill-chk-all-m" onchange="toggleAllBills(this)" style="width:20px;height:20px;cursor:pointer;flex:0 0 auto">
+        <label for="bill-chk-all-m" style="font-size:14px;font-weight:500;cursor:pointer;flex:1">เลือกทั้งหมด</label>
+        <span id="bill-sel-info" style="font-size:12px;color:var(--text3)"></span>
+      </div>
+    </div>
     <div class="bill-mobile" id="bill-cards"></div>
   </div>
 </div>
@@ -895,11 +902,14 @@ function selectedRooms(){
 }
 function updateSelCount(){
   const n=selectedRooms().length;
+  const total=new Set([...document.querySelectorAll('.bill-chk')].map(c=>c.dataset.room)).size;
   const btn=document.getElementById('btn-send-sel');
   if(btn){ btn.textContent='📤 ส่ง LINE ที่เลือก ('+n+')'; btn.disabled=(n===0); }
-  const all=document.getElementById('bill-chk-all');
-  const total=new Set([...document.querySelectorAll('.bill-chk')].map(c=>c.dataset.room)).size;
-  if(all) all.checked=(total>0 && n===total);
+  // ติ๊ก "เลือกทั้งหมด" มี 2 ที่: หัวตาราง (จอใหญ่) และแถบด้านบนการ์ด (มือถือ)
+  const allOn=(total>0 && n===total);
+  ['bill-chk-all','bill-chk-all-m'].forEach(id=>{const el=document.getElementById(id); if(el) el.checked=allOn});
+  const info=document.getElementById('bill-sel-info');
+  if(info) info.textContent = n ? ('เลือก '+n+'/'+total+' ห้อง') : (total ? (total+' ห้องเชื่อม LINE') : 'ไม่มีห้องเชื่อม LINE');
 }
 // ติ๊ก 1 ช่อง → sync ให้ตรงกันทั้งมุมมองตาราง (desktop) และการ์ด (มือถือ)
 function onBillChk(el){
@@ -948,6 +958,7 @@ function renderBills(){
   if(!mb.length){
     if(tb)tb.innerHTML=`<tr><td colspan="11" style="text-align:center;padding:28px;color:var(--text3)">ยังไม่มีข้อมูลเดือนนี้</td></tr>`;
     if(cards)cards.innerHTML=`<div style="text-align:center;padding:28px;color:var(--text3)">ยังไม่มีข้อมูลเดือนนี้</div>`;
+    updateSelCount();
     return;
   }
   // Desktop table
@@ -985,7 +996,7 @@ function renderBills(){
         </div>
       </div>
     </div>`}).join('');
-  const ca=document.getElementById('bill-chk-all'); if(ca) ca.checked=false;
+  ['bill-chk-all','bill-chk-all-m'].forEach(id=>{const el=document.getElementById(id); if(el) el.checked=false});
   updateSelCount();
 }
 function togSt(rid,mo){const b=bills.find(x=>x.room===rid&&x.month===mo);if(!b)return;const c={'รอชำระ':'ชำระแล้ว','ชำระแล้ว':'ค้างชำระ','ค้างชำระ':'รอชำระ'};b.status=c[b.status]||'ชำระแล้ว';const r=rooms.find(x=>x.id===rid);if(r)r.status=b.status;syncBill(b);if(r)syncRoom(r);renderBills();renderRooms();toast('→ '+b.status)}
