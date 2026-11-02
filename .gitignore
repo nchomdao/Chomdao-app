@@ -1,5 +1,21 @@
+# ===== OS junk =====
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
 *~
+
+# ===== ความลับ: ห้ามขึ้น public repo เด็ดขาด =====
+# Make scenario blueprint — มี Anthropic API key (sk-ant-...) ฝังอยู่
+*.blueprint.json
+
+# ไฟล์คีย์/ความลับทั่วไป
+.env
+.env.*
+*.key
+*.pem
+
+# ===== ไฟล์ทำงานในเครื่อง (ไม่ต้องขึ้นเว็บ) =====
+.claude/
+files.zip
+4D61D0F8-558E-4873-A875-C5140065505E.jpg
