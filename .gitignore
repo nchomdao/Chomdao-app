@@ -19,3 +19,9 @@ Thumbs.db
 .claude/
 files.zip
 4D61D0F8-558E-4873-A875-C5140065505E.jpg
+
+# ===== ไฟล์เก่า ไม่ต้องขึ้นเว็บ (ยังเก็บไว้ในเครื่อง) =====
+migrate.html
+index-firebase.html
+chomdao-apps-script.js
+firestore-rules.txt

@@ -273,9 +273,7 @@ tbody tr:hover td{background:var(--bg3)}
       <div id="sync-time" style="font-size:10px;color:var(--text3);text-align:center;margin-bottom:6px"></div>
       <div style="display:flex;gap:4px">
         <button class="btn btn-sm btn-g" style="flex:1;justify-content:center;font-size:11px" onclick="syncToSheet().then(()=>toast('Sync สำเร็จ ✓'))">🔥 Sync ไป</button>
-        <button class="btn btn-sm btn-p" style="flex:1;justify-content:center;font-size:11px" onclick="forceRefresh()">⟳ Real-time</button>
       </div>
-      <button class="btn btn-sm" style="width:100%;justify-content:center;font-size:10px;margin-top:4px;color:var(--text3)" onclick="debugCheck();openModal('m-debug')">🔧 ตรวจสอบ Sync</button>
     </div>
   </div>
 </div>
@@ -421,16 +419,6 @@ tbody tr:hover td{background:var(--bg3)}
   <div class="pdf-doc" id="pdf-doc"></div>
 </div>
 
-<!-- Debug Panel -->
-<div class="mo" id="m-debug"><div class="modal" style="width:500px">
-  <div class="mh"><div class="mt">🔧 ตรวจสอบ Sync</div><button class="mx" onclick="closeModal('m-debug')">×</button></div>
-  <div id="debug-content" style="font-size:13px;font-family:monospace;background:var(--bg);padding:12px;border-radius:var(--rds);max-height:60vh;overflow-y:auto;white-space:pre-wrap;word-break:break-all"></div>
-  <div class="mf" style="flex-wrap:wrap;gap:6px">
-    <button class="btn btn-sm" onclick="debugCheck()">🔍 ตรวจสอบใหม่</button>
-    <button class="btn btn-sm btn-p" onclick="debugTestSync()">📤 ทดสอบ Sync ไป Sheet</button>
-    <button class="btn btn-sm btn-g" onclick="debugTestLoad()">📥 ทดสอบดึงจาก Sheet</button>
-  </div>
-</div></div>
 
 <script type="module">
 // ===== FIREBASE =====
@@ -551,9 +539,6 @@ function updateSyncBadge(){
   }
 }
 
-async function forceRefresh(){
-  toast('Firebase เป็น real-time อยู่แล้ว ข้อมูลอัพเดทอัตโนมัติ');
-}
 
 // ===== REAL-TIME LISTENERS =====
 function startListeners(){
@@ -621,8 +606,6 @@ function genMonths(){const arr=[];for(let i=11;i>=0;i--){let m=CUR_MONTH-i;let y
 const MONTHS=genMonths();
 const MLABEL={};const MFULL={};
 MONTHS.forEach(m=>{const[y,mo]=m.split('-');MLABEL[m]=MNAMES_SHORT[parseInt(mo)]+' '+y.slice(2);MFULL[m]=MNAMES_FULL[parseInt(mo)]+' '+y});
-function saveLocal(){/* no-op: Firebase เป็น source of truth */}
-function save(){/* no-op */}
 // ลบข้อมูลเดือนที่เก่ากว่า 12 เดือน
 function cleanOldData(){
   const validMonths=new Set(MONTHS);
@@ -639,7 +622,7 @@ function cleanOldData(){
     }
   });
   meters=newMeters;
-  save();
+  
 }
 function prevMonth(m){const i=MONTHS.indexOf(m);return i>0?MONTHS[i-1]:null}
 // prevMonthAny: คำนวณเดือนก่อนหน้าโดยไม่ต้องอยู่ใน MONTHS array (สำหรับดึงเลขมิเตอร์)
@@ -787,7 +770,7 @@ function saveBld(){
   if(!name||!prefix){toast('กรุณากรอกชื่อและ prefix','err');return}
   const key=name.toLowerCase().replace(/\s/g,'');
   if(buildings.find(b=>b.key===key)){toast('มีหอพักนี้แล้ว','err');return}
-  buildings.push({key,name,prefix,color});save();syncBuilding({key,name,prefix,color});renderBldSidebar();closeModal('m-bld');
+  buildings.push({key,name,prefix,color});syncBuilding({key,name,prefix,color});renderBldSidebar();closeModal('m-bld');
   document.getElementById('nb-name').value='';document.getElementById('nb-prefix').value='';
   toast('เพิ่มหอพักสำเร็จ');
 }
@@ -846,8 +829,8 @@ function saveRoom(){
   if(!num){toast('กรุณาใส่เลขห้อง','err');return}if(!price||price<=0){toast('กรุณาใส่ค่าห้อง','err');return}
   const id=b.prefix+num;
   const existing=rooms.find(r=>r.id===id);
-  if(existing){existing.price=price;existing.type=type;save();syncRoom(existing);renderRooms();closeModal('m-room');toast('แก้ไขห้อง '+id+' สำเร็จ');return}
-  const nr={id,price,type,tenant:'',phone:'',moveIn:'',status:''};rooms.push(nr);save();syncRoom(nr);renderRooms();closeModal('m-room');toast('เพิ่มห้อง '+id+' สำเร็จ');
+  if(existing){existing.price=price;existing.type=type;syncRoom(existing);renderRooms();closeModal('m-room');toast('แก้ไขห้อง '+id+' สำเร็จ');return}
+  const nr={id,price,type,tenant:'',phone:'',moveIn:'',status:''};rooms.push(nr);syncRoom(nr);renderRooms();closeModal('m-room');toast('เพิ่มห้อง '+id+' สำเร็จ');
 }
 function openTenantModal(){
   const vac=filtered().filter(r=>!r.tenant);if(!vac.length){toast('ไม่มีห้องว่าง','err');return}
@@ -858,7 +841,7 @@ function openTenantModal(){
 function saveTenant(){
   const rid=document.getElementById('nt-room').value;const name=document.getElementById('nt-name').value.trim()||'ผู้เช่า '+rid;
   const r=rooms.find(x=>x.id===rid);if(r){r.tenant=name;r.phone=document.getElementById('nt-phone').value;r.moveIn=document.getElementById('nt-date').value;r.status='รอชำระ'}
-  save();syncRoom(r);renderRooms();closeModal('m-tenant');toast('เพิ่มผู้เช่าสำเร็จ');
+  syncRoom(r);renderRooms();closeModal('m-tenant');toast('เพิ่มผู้เช่าสำเร็จ');
 }
 function showDetail(rid){
   const r=rooms.find(x=>x.id===rid);if(!r)return;const b=getBld(r);
@@ -881,7 +864,7 @@ function editRoomDetail(rid){
     origOpen('m-room');
   },100);
 }
-function removeTenant(rid){if(!confirm('ยืนยัน?'))return;const r=rooms.find(x=>x.id===rid);if(r){r.tenant='';r.phone='';r.moveIn='';r.status='';delete r.lineUserId}save();syncRoom(r);renderRooms();closeModal('m-detail');toast('ย้ายออกสำเร็จ')}
+function removeTenant(rid){if(!confirm('ยืนยัน?'))return;const r=rooms.find(x=>x.id===rid);if(r){r.tenant='';r.phone='';r.moveIn='';r.status='';delete r.lineUserId}syncRoom(r);renderRooms();closeModal('m-detail');toast('ย้ายออกสำเร็จ')}
 // ล้างการเชื่อม LINE ของห้อง (เผื่อแมปผิดคน)
 function clearLine(rid){if(!confirm('ล้างการเชื่อม LINE ของห้อง '+rid+'?'))return;const r=rooms.find(x=>x.id===rid);if(r){delete r.lineUserId;syncRoom(r)}renderRooms();closeModal('m-detail');toast('ล้าง LINE แล้ว')}
 function delRoom(rid){if(!confirm('ลบห้อง '+rid+'?'))return;rooms=rooms.filter(x=>x.id!==rid);fbDeleteRoom(rid);renderRooms();closeModal('m-detail');toast('ลบห้องสำเร็จ')}
@@ -1005,7 +988,7 @@ function renderBills(){
   const ca=document.getElementById('bill-chk-all'); if(ca) ca.checked=false;
   updateSelCount();
 }
-function togSt(rid,mo){const b=bills.find(x=>x.room===rid&&x.month===mo);if(!b)return;const c={'รอชำระ':'ชำระแล้ว','ชำระแล้ว':'ค้างชำระ','ค้างชำระ':'รอชำระ'};b.status=c[b.status]||'ชำระแล้ว';const r=rooms.find(x=>x.id===rid);if(r)r.status=b.status;save();syncBill(b);if(r)syncRoom(r);renderBills();renderRooms();toast('→ '+b.status)}
+function togSt(rid,mo){const b=bills.find(x=>x.room===rid&&x.month===mo);if(!b)return;const c={'รอชำระ':'ชำระแล้ว','ชำระแล้ว':'ค้างชำระ','ค้างชำระ':'รอชำระ'};b.status=c[b.status]||'ชำระแล้ว';const r=rooms.find(x=>x.id===rid);if(r)r.status=b.status;syncBill(b);if(r)syncRoom(r);renderBills();renderRooms();toast('→ '+b.status)}
 // เปลี่ยนสถานะจากหน้าห้องพัก (ใช้เดือนที่เลือกบนหน้าห้องพัก)
 function togStRoom(rid){const mo=document.getElementById('room-mo').value;const b=bills.find(x=>x.room===rid&&x.month===mo);if(!b){toast('ยังไม่มีบิลเดือนนี้ — สร้างบิลก่อน','err');return}togSt(rid,mo)}
 function openBillModal(){
@@ -1034,7 +1017,7 @@ function saveBill(){
   const extras=[];document.querySelectorAll('.er').forEach(row=>{const n=row.querySelector('.en').value.trim();const a=parseFloat(row.querySelector('.ea').value)||0;if(n&&a>0)extras.push({name:n,amt:a})});
   const bill={room:rid,month:mo,tenant:r?r.tenant:'',rent:parseFloat(document.getElementById('nb-rent').value)||0,water:parseFloat(document.getElementById('nb-water').value)||0,elec:parseFloat(document.getElementById('nb-elec').value)||0,extras,status:document.getElementById('nb-st').value};
   const idx=bills.findIndex(b=>b.room===rid&&b.month===mo);if(idx>=0)bills[idx]=bill;else bills.push(bill);
-  if(r)r.status=bill.status;save();syncBill(bill);if(r)syncRoom(r);renderBills();renderRooms();closeModal('m-bill');toast('บันทึกสำเร็จ');
+  if(r)r.status=bill.status;syncBill(bill);if(r)syncRoom(r);renderBills();renderRooms();closeModal('m-bill');toast('บันทึกสำเร็จ');
 }
 
 // ===== METERS =====
@@ -1122,7 +1105,7 @@ function saveAllMeters(){
     markBill(bill);
     c++;
   });
-  save();
+  
   // ส่งทั้งหมดทีเดียว (ไม่ส่งทีละ bill เพราะจะ race condition)
   syncToSheet().then(ok=>{
     if(ok) toast('บันทึก '+c+' ห้อง + sync สำเร็จ ✓');
@@ -1386,42 +1369,6 @@ function openRoomModal(){
 const origOpen=openModal;
 openModal=function(id){if(id==='m-room')openRoomModal();origOpen(id)}
 
-// ===== DEBUG =====
-function debugLog(msg){
-  const el=document.getElementById('debug-content');
-  if(el) el.textContent=msg;
-}
-function debugCheck(){
-  let log='=== 🔥 Firebase Real-time ===\n';
-  log+='Rooms: '+rooms.length+' ห้อง\n';
-  log+='Bills: '+bills.length+' รายการ\n';
-  log+='Meters: '+Object.keys(meters).length+' รายการ\n';
-  log+='Buildings: '+buildings.length+' หอพัก\n';
-  log+='Status: '+syncStatus+'\n';
-  log+='Firebase Ready: '+_fbReady+'\n';
-  log+='\n=== ตัวอย่าง Bills (5 รายการแรก) ===\n';
-  bills.slice(0,5).forEach(b=>{
-    log+=b.room+' '+b.month+' | ค่าห้อง:'+b.rent+' น้ำ:'+b.water+' ไฟ:'+b.elec+' | '+b.status+'\n';
-  });
-  log+='\n=== ตัวอย่าง Meters (5 รายการแรก) ===\n';
-  Object.keys(meters).slice(0,5).forEach(k=>{
-    const m=meters[k];
-    log+=k+' → prev:'+m.prev+' curr:'+m.curr+'\n';
-  });
-  debugLog(log);
-}
-async function debugTestSync(){
-  debugLog('กำลัง Sync ไป Firebase...\n');
-  try{
-    await syncToSheet();
-    debugLog('✅ Sync สำเร็จ! Rooms:'+rooms.length+' Bills:'+bills.length+' Meters:'+Object.keys(meters).length);
-  }catch(e){
-    debugLog('❌ ERROR: '+e.message);
-  }
-}
-async function debugTestLoad(){
-  debugLog('🔥 Firebase เป็น real-time\nข้อมูลอัพเดทอัตโนมัติทุกครั้งที่มีการเปลี่ยนแปลง\n\nไม่ต้องกดดึง — ข้อมูลปัจจุบัน:\nRooms: '+rooms.length+'\nBills: '+bills.length+'\nMeters: '+Object.keys(meters).length);
-}
 
 // ===== EXPOSE TO GLOBAL (เพราะ type="module") =====
 Object.assign(window, {
@@ -1433,8 +1380,7 @@ Object.assign(window, {
   togSt, togStRoom, setSt, addExtra, updPreview, autoFillRent,
   mTab, mIn, mKey, updateRoomIdPreview,
   renderRooms, renderBills, renderMeters, renderReport, setMonth,
-  syncToSheet, forceRefresh,
-  debugCheck, debugTestSync, debugTestLoad
+  syncToSheet
 });
 
 init();
