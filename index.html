@@ -305,7 +305,6 @@ tbody tr:hover td{background:var(--bg3)}
     <div class="topbar-r">
       <select id="bill-mo" onchange="setMonth(this.value)" style="padding:7px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rds);color:var(--text);font-family:'Sarabun',sans-serif;font-size:14px"></select>
       <button class="btn" onclick="openBillModal()">+ บันทึก</button>
-      <button class="btn btn-g" onclick="printAllBills()">📄 บิลทั้งหมด (PDF)</button>
       <button class="btn btn-g" id="btn-send-sel" onclick="sendSelectedBillsLine()" disabled>📤 ส่ง LINE ที่เลือก (0)</button>
     </div>
   </div>
@@ -1336,20 +1335,6 @@ function makePDF(bill){
   openPdfOverlay(content);
 }
 
-// พิมพ์ทั้งหมด — จับคู่ 2 บิลต่อหน้า A4
-function printAllBills(){
-  const mo=document.getElementById('bill-mo').value;const fr=filtered().map(r=>r.id);
-  const mb=bills.filter(b=>b.month===mo&&(curBld==='all'||fr.includes(b.room)));
-  if(!mb.length){toast('ไม่มีบิล','err');return}
-  let pages='';
-  for(let i=0;i<mb.length;i+=2){
-    const b1=billHTML(mb[i]);
-    const b2=mb[i+1]?billHTML(mb[i+1]):'<div class="bill"></div>';
-    pages+='<div class="pdfpage">'+b1+b2+'</div>';
-  }
-  openPdfOverlay(pages);
-  toast('แสดง '+mb.length+' บิล ('+Math.ceil(mb.length/2)+' หน้า) — กด “บันทึกเป็น PDF”');
-}
 
 
 // ===== ตารางเช็คมิเตอร์ (ตัวใหญ่ ไว้เทียบกับที่จดมาหน้างาน) =====
@@ -1442,7 +1427,7 @@ async function debugTestLoad(){
 Object.assign(window, {
   toggleSidebar, nav, filterBld, openModal, closeModal,
   openBillModal, openTenantModal, showDetail, editRoomDetail,
-  removeTenant, delRoom, clearLine, editBill, printBill, printAllBills, closePdfOverlay, savePdf, sendBillLine,
+  removeTenant, delRoom, clearLine, editBill, printBill, closePdfOverlay, savePdf, sendBillLine,
   sendSelectedBillsLine, toggleAllBills, onBillChk, updateSelCount, printMeterSheet,
   saveBill, saveBld, saveRoom, saveTenant, saveAllMeters,
   togSt, togStRoom, setSt, addExtra, updPreview, autoFillRent,
