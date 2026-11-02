@@ -220,12 +220,12 @@ tbody tr:hover td{background:var(--bg3)}
 /* หน้าเต็ม A4 ไม่มีเส้นประกลาง (ใช้กับตารางเช็คมิเตอร์) */
 .pdf-doc .pdfpage.plain::after{display:none}
 .pdf-doc .msheet{padding:12mm 10mm;font-family:'Sarabun',sans-serif;color:#111}
-.pdf-doc .msheet h2{font-family:'Kanit',sans-serif;font-size:26px;margin:0 0 4px;color:#1E3A5F}
-.pdf-doc .msheet .sub{font-size:17px;color:#444;margin-bottom:12px}
+.pdf-doc .msheet h2{font-family:'Kanit',sans-serif;font-size:30px;margin:0 0 4px;color:#1E3A5F}
+.pdf-doc .msheet .sub{font-size:19px;color:#444;margin-bottom:12px}
 .pdf-doc .msheet table{width:100%;border-collapse:collapse}
-.pdf-doc .msheet th{background:#1E3A5F;color:#fff;font-size:17px;padding:8px 6px;border:1px solid #1E3A5F}
-.pdf-doc .msheet td{font-size:18px;padding:7px 6px;border:1px solid #9ca3af}
-.pdf-doc .msheet td.rm{font-weight:700;font-size:21px}
+.pdf-doc .msheet th{background:#1E3A5F;color:#fff;font-size:22px;padding:9px 8px;border:1px solid #1E3A5F}
+.pdf-doc .msheet td{font-size:25px;padding:8px 8px;border:1px solid #9ca3af}
+.pdf-doc .msheet td.rm{font-weight:700;font-size:29px}
 .pdf-doc .msheet td.num{text-align:right}
 .pdf-doc .msheet tr:nth-child(even) td{background:#f3f4f6}
 /* รีเซ็ตไม่ให้ธีมมืดของแอปเล่นงานตารางบิล */
@@ -1326,7 +1326,7 @@ function printMeterSheet(){
   const occ=filtered().filter(r=>r.tenant);
   if(!occ.length){toast('ไม่มีห้องที่มีผู้เช่า','err');return}
   const pmAny=prevMonthAny(mo);
-  const ROWS=22; // จำนวนแถวต่อหน้า A4 (ตัวหนังสือใหญ่)
+  const ROWS=16; // จำนวนแถวต่อหน้า A4 (ตัวหนังสือใหญ่พิเศษ)
   const bldName = curBld==='all' ? 'ทุกหอพัก' : ((buildings.find(x=>x.key===curBld)||{}).name||'');
   const rowHtml=(r,type)=>{
     const k=r.id+'_'+mo+'_'+type, pk=r.id+'_'+pmAny+'_'+type;
@@ -1335,7 +1335,7 @@ function printMeterSheet(){
     const curr=d.curr||0;
     const u=calcUnits(prev,curr);
     const rate=getRate(r.id)[type];
-    return '<tr><td class="rm">'+r.id+'</td><td>'+(r.tenant||'-')+'</td>'
+    return '<tr><td class="rm">'+r.id+'</td>'
       +'<td class="num">'+prev.toLocaleString()+'</td>'
       +'<td class="num">'+(curr?curr.toLocaleString():'—')+'</td>'
       +'<td class="num">'+(curr?u.toLocaleString():'—')+'</td>'
@@ -1350,7 +1350,7 @@ function printMeterSheet(){
       pages+='<div class="pdfpage plain"><div class="msheet">'
         +'<h2>ตารางเช็คมิเตอร์ '+label+'</h2>'
         +'<div class="sub">'+(MFULL[mo]||mo)+' · '+bldName+' · หน้า '+(Math.floor(i/ROWS)+1)+'/'+totalPages+'</div>'
-        +'<table><thead><tr><th>ห้อง</th><th>ผู้เช่า</th><th>เลขเดิม</th><th>เลขใหม่</th><th>หน่วย</th><th>เป็นเงิน</th></tr></thead><tbody>'
+        +'<table><thead><tr><th>ห้อง</th><th>เลขเดิม</th><th>เลขใหม่</th><th>หน่วย</th><th>เป็นเงิน</th></tr></thead><tbody>'
         +chunk.map(function(r){return rowHtml(r,type)}).join('')
         +'</tbody></table></div></div>';
     }
