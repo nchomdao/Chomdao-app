@@ -652,6 +652,30 @@ function calcUnits(prev,curr){
   if(roll<=1000) return roll;        // วนรอบจริง (หน่วยสมเหตุผล เช่น 9795→120 = 325 หน่วย)
   return 0;                          // หน่วยเยอะผิดปกติ = พิมพ์ผิด/ยังไม่กรอก → ไม่คิดหน่วย กันบิลบานปลาย
 }
+// ===== ตรวจความผิดปกติของเลขมิเตอร์ (คืนข้อความเตือน / '' = ปกติ) =====
+function meterWarn(type,prev,curr,u){
+  prev=Number(prev)||0; curr=Number(curr)||0;
+  if(curr<=0) return '';                 // ยังไม่กรอก — ไม่นับว่าผิดปกติ
+  if(curr<prev){
+    const max=prev<=9999?10000:100000;
+    // ถ้าเป็นมิเตอร์วนรอบจริง (หน่วยสมเหตุผล) ไม่ต้องเตือน
+    if(max-prev+curr>1000) return 'เลขใหม่ '+curr+' น้อยกว่าเลขเก่า '+prev+' → ระบบจะคิด 0 หน่วย';
+  }
+  const lim=(type==='water')?100:500;     // เพดานหน่วยต่อเดือนที่สมเหตุผล
+  if(u>lim) return 'ใช้ '+u.toLocaleString()+' หน่วย สูงผิดปกติ (ปกติไม่เกิน '+lim+')';
+  return '';
+}
+// ทาสีช่องกรอก + ช่องหน่วย ตามผลการตรวจ
+function paintMeterWarn(rid,type,warn,hasCurr){
+  const inp=document.querySelector('.mi[data-r="'+rid+'"][data-t="'+type+'"][data-f="curr"]');
+  if(inp){
+    inp.style.borderColor = warn?'var(--red2)':(hasCurr?'':'var(--amber)');
+    inp.style.background  = warn?'rgba(239,68,68,.10)':(hasCurr?'':'rgba(245,158,11,.05)');
+    inp.title = warn||'';
+  }
+  const uc=document.getElementById('u_'+type+'_'+rid);
+  if(uc){ uc.style.color = warn?'var(--red2)':''; uc.title = warn||'' }
+}
 function getRate(rid){
   // Chomdaoplace: ไฟ 8, น้ำ 28
   // Chomdaoresort R01-12: ไฟ 7, น้ำ 25
@@ -1062,15 +1086,17 @@ function renderMT(type,tbId,occ,mo,pm){
       }
     }
     const curr=s.curr||0;const u=calcUnits(prev,curr);const amt=u*rate;
-    return`<tr><td style="font-weight:600">${r.id}</td><td style="color:${b.color};font-size:11px">${b.name}</td><td style="color:var(--text2)">${r.tenant}</td><td><input class="mi" type="number" value="${prev}" data-r="${r.id}" data-t="${type}" data-f="prev" onchange="mIn(this)" oninput="mIn(this)" onkeydown="mKey(event,this)"></td><td><input class="mi" type="number" value="${curr||''}" placeholder="—" data-r="${r.id}" data-t="${type}" data-f="curr" onchange="mIn(this)" oninput="mIn(this)" onkeydown="mKey(event,this)" style="${!curr?'border-color:var(--amber);background:rgba(245,158,11,.05)':''}"></td><td style="font-weight:500" id="u_${type}_${r.id}">${curr?u:'—'}</td><td style="font-weight:600;color:${type==='elec'?'var(--amber2)':'var(--accent2)'}" id="a_${type}_${r.id}">${curr&&amt?amt.toLocaleString():'—'}</td></tr>`}).join('');
+    const w=meterWarn(type,prev,curr,u);
+    return`<tr><td style="font-weight:600">${r.id}</td><td style="color:${b.color};font-size:11px">${b.name}</td><td style="color:var(--text2)">${r.tenant}</td><td><input class="mi" type="number" value="${prev}" data-r="${r.id}" data-t="${type}" data-f="prev" onchange="mIn(this)" oninput="mIn(this)" onkeydown="mKey(event,this)"></td><td><input class="mi" type="number" value="${curr||''}" placeholder="—" data-r="${r.id}" data-t="${type}" data-f="curr" onchange="mIn(this)" oninput="mIn(this)" onkeydown="mKey(event,this)" style="${w?'border-color:var(--red2);background:rgba(239,68,68,.10)':(!curr?'border-color:var(--amber);background:rgba(245,158,11,.05)':'')}" title="${w}"></td><td style="font-weight:500${w?';color:var(--red2)':''}" id="u_${type}_${r.id}" title="${w}">${curr?(w?'⚠ '+u:u):'—'}</td><td style="font-weight:600;color:${type==='elec'?'var(--amber2)':'var(--accent2)'}" id="a_${type}_${r.id}">${curr&&amt?amt.toLocaleString():'—'}</td></tr>`}).join('');
 }
 let _meterSyncTimer=null;
 function mIn(el){
   const rid=el.dataset.r;const type=el.dataset.t;const field=el.dataset.f;const mo=document.getElementById('meter-mo').value;
   const k=rid+'_'+mo+'_'+type;if(!meters[k])meters[k]={};meters[k][field]=parseFloat(el.value)||0;markMeter(k);
   const prev=meters[k].prev||0;const curr=meters[k].curr||0;const u=calcUnits(prev,curr);const rate=getRate(rid)[type];
-  document.getElementById('u_'+type+'_'+rid).textContent=curr?u:'—';document.getElementById('a_'+type+'_'+rid).textContent=u*rate?(u*rate).toLocaleString():'—';
-  if(field==='curr'){el.style.borderColor=el.value?'':'var(--amber)';el.style.background=el.value?'':'rgba(245,158,11,.05)'}
+  const w=meterWarn(type,prev,curr,u);
+  document.getElementById('u_'+type+'_'+rid).textContent=curr?(w?'⚠ '+u:u):'—';document.getElementById('a_'+type+'_'+rid).textContent=u*rate?(u*rate).toLocaleString():'—';
+  paintMeterWarn(rid,type,w,!!curr);
   // Auto-sync meters to Sheet (debounce 3 วินาที)
   clearTimeout(_meterSyncTimer);
   _meterSyncTimer=setTimeout(()=>{syncMeters()},3000);
@@ -1094,6 +1120,22 @@ function saveAllMeters(){
   const allOcc=rooms.filter(r=>r.tenant);
   let c=0;
   const pmAny=prevMonthAny(mo);
+  // ตรวจความผิดปกติก่อน แล้วถามยืนยันถ้าเจอ
+  const warns=[];
+  allOcc.forEach(r=>{
+    ['elec','water'].forEach(t=>{
+      const kk=r.id+'_'+mo+'_'+t, pk=r.id+'_'+pmAny+'_'+t;
+      const d=meters[kk]||{};
+      const p=d.prev||(meters[pk]?meters[pk].curr:0)||0;
+      const cv=d.curr||0;
+      const w=meterWarn(t,p,cv,calcUnits(p,cv));
+      if(w) warns.push('• '+r.id+' ('+(t==='elec'?'ไฟ':'น้ำ')+') — '+w);
+    });
+  });
+  if(warns.length){
+    const body=warns.slice(0,10).join('\n')+(warns.length>10?'\n… และอีก '+(warns.length-10)+' รายการ':'');
+    if(!confirm('⚠️ พบเลขมิเตอร์ผิดปกติ '+warns.length+' รายการ\n\n'+body+'\n\nยืนยันบันทึกทั้งหมดเลยไหม?')) return;
+  }
   allOcc.forEach(r=>{
     const rt=getRate(r.id);
     const ek=r.id+'_'+mo+'_elec';const wk=r.id+'_'+mo+'_water';
